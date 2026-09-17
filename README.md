@@ -33,6 +33,31 @@ This project implements the technical assessment requirements for the AI Enginee
 |                        Data Layer                           |
 |  * Ingestion: support_tickets.csv -> SQLite (tickets.db)    |
 +-------------------------------------------------------------+
+```
+
+### Key Engineering Decisions
+
+* **In-Memory / Local SQLite**: Rather than executing raw Python `eval()` calls on Pandas (a severe security risk), user questions are compiled into standardized SQL and executed within a read-only database layer.
+* **SQL Guardrails**: The engine validates that every generated statement begins strictly with `SELECT` or `WITH`, actively blocking data modification operations (`DROP`, `DELETE`, `UPDATE`, `INSERT`).
+* **Self-Healing SQL Loop**: If a generated query encounters a syntax or column error, the error traceback is intercepted and passed back to the LLM for automatic re-correction without crashing the API.
+* **Category-Specific Outlier Analysis**: Outliers in resolution times are calculated via the Interquartile Range (IQR = Q3 - Q1, threshold > Q3 + 1.5 * IQR) isolated by ticket category (`Billing`, `Technical`, `General`), preventing cross-domain distribution skew.
+* **Dynamic Visualizations for Stakeholders**: Tabular results are dynamically inspected and parsed into visual bar charts, trend lines, and KPI metrics so non-technical users can quickly interpret patterns without reading raw SQL rows.
+
+---
+
+## Application Previews & Screenshots
+
+### Natural Language Query & Dynamic Visualizer
+![Query Interface](assets/query_demo.png)
+
+### Operational Anomaly Detection Dashboard
+![Anomaly Dashboard](assets/anomalies_dashboard.png)
+
+### Interactive FastAPI Swagger Documentation
+![Swagger API Docs](assets/api_swagger.png)
+
+---
+
 ## Dataset
 
 * **Source File**: `data/support_tickets.csv` (500 records)
@@ -64,11 +89,97 @@ This project implements the technical assessment requirements for the AI Enginee
 ```bash
 git clone [https://github.com/shankar-a-lot/support-ticket-ai.git](https://github.com/shankar-a-lot/support-ticket-ai.git)
 cd support-ticket-ai
-Create and activate a virtual environment:Bashpython -m venv venv
-On Windows:DOSvenv\Scripts\activate
-On Linux/macOS:Bashsource venv/bin/activate
-Install project dependencies:Bashpip install -r requirements.txt
-Set up environment variables:Create a .env file in the root folder:Code snippetGROQ_API_KEY=your_groq_api_key_here
-Running the System (Single Command)Start both the FastAPI backend and Streamlit UI simultaneously with one command:Bashpython run.py
-Interactive Web UI: http://localhost:8501FastAPI Docs / Swagger: http://localhost:8000/docsREST API SpecificationMethodEndpointDescriptionGET/healthVerifies database connectivity and data record volume (500 rows).POST/queryConverts natural language input to SQL, executes it, and returns structured data + natural language answer.GET/anomaliesReturns list of unresolved SLA breaches and IQR resolution time outliers.Sample Queries & OutputsQuery: "How many tickets are currently open?"Generated SQL: SELECT COUNT(*) FROM tickets WHERE status = 'Open';Output: "There are currently 111 tickets open."Query: "Which agent has the lowest average customer rating?"Generated SQL: SELECT agent_id, AVG(customer_rating) AS avg_rating FROM tickets WHERE customer_rating IS NOT NULL GROUP BY agent_id ORDER BY avg_rating ASC LIMIT 1;Output: "Agent AGT-08 has the lowest average customer rating at approximately 3.25."Query: "Show me all Critical tickets not resolved within 12 hours."Generated SQL: SELECT * FROM tickets WHERE priority = 'Critical' AND (resolution_time_hrs > 12 OR (status != 'Resolved'));Query: "What is the average customer rating for Technical category tickets?"Generated SQL: SELECT AVG(customer_rating) AS avg_rating FROM tickets WHERE category = 'Technical' AND customer_rating IS NOT NULL;Automated TestingExecute the test suite to verify endpoints and query execution:Bashpython -m pytest tests/test_api.py
-Known Limitations & Production RoadmapRate Limits: Currently uses the Groq free tier; a production setup would route to self-hosted Ollama instances or an enterprise API gateway.Caching Layer: Frequent aggregate queries can be cached with Redis to reduce repeated LLM inference latency.Complex Temporal Filtering: Pre-processing human expressions like "last fiscal quarter" into explicit timestamp bounds before prompt delivery.
+```
+
+2. Create and activate a virtual environment:
+
+```bash
+python -m venv venv
+```
+
+* On Windows:
+```cmd
+venv\Scripts\activate
+```
+
+* On Linux/macOS:
+```bash
+source venv/bin/activate
+```
+
+3. Install project dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Set up environment variables:
+
+Create a `.env` file in the root folder:
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+---
+
+## Running the System (Single Command)
+
+Start both the FastAPI backend and Streamlit UI simultaneously with one command:
+
+```bash
+python run.py
+```
+
+* **Interactive Web UI**: http://localhost:8501
+* **FastAPI Docs / Swagger**: http://localhost:8000/docs
+
+---
+
+## REST API Specification
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Verifies database connectivity and data record volume (500 rows). |
+| `POST` | `/query` | Converts natural language input to SQL, executes it, and returns structured data + natural language answer. |
+| `GET` | `/anomalies` | Returns list of unresolved SLA breaches and IQR resolution time outliers. |
+
+---
+
+## Sample Queries & Outputs
+
+* **Query**: `"How many tickets are currently open?"`
+  * **Generated SQL**: `SELECT COUNT(*) FROM tickets WHERE status = 'Open';`
+  * **Output**: *"There are currently 111 tickets open."*
+
+* **Query**: `"Which agent has the lowest average customer rating?"`
+  * **Generated SQL**: `SELECT agent_id, AVG(customer_rating) AS avg_rating FROM tickets WHERE customer_rating IS NOT NULL GROUP BY agent_id ORDER BY avg_rating ASC LIMIT 1;`
+  * **Output**: *"Agent AGT-08 has the lowest average customer rating at approximately 3.25."*
+
+* **Query**: `"Show me all Critical tickets not resolved within 12 hours."`
+  * **Generated SQL**: `SELECT * FROM tickets WHERE priority = 'Critical' AND (resolution_time_hrs > 12 OR (status != 'Resolved'));`
+
+* **Query**: `"What is the average customer rating for Technical category tickets?"`
+  * **Generated SQL**: `SELECT AVG(customer_rating) AS avg_rating FROM tickets WHERE category = 'Technical' AND customer_rating IS NOT NULL;`
+
+---
+
+## Automated Testing
+
+Execute the test suite to verify endpoints and query execution:
+
+```bash
+python -m pytest tests/test_api.py
+```
+
+---
+
+## Known Limitations & Production Roadmap
+
+* **Rate Limits**: Currently uses the Groq free tier; a production setup would route to self-hosted Ollama instances or an enterprise API gateway.
+* **Caching Layer**: Frequent aggregate queries can be cached with Redis to reduce repeated LLM inference latency.
+* **Complex Temporal Filtering**: Pre-processing human expressions like "last fiscal quarter" into explicit timestamp bounds before prompt delivery.
+````<ElicitationsGroup>
+<Elicitation id="email-confirmation">Would you like the ready-to-send email template to submit to RajathKumar@dotmappers.in?</Elicitation>
+<Elicitation id="walkthrough-prep">Would you like to practice sample technical questions for the 30-minute architecture review call?</Elicitation>
+</ElicitationsGroup>
