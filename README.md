@@ -179,7 +179,3 @@ python -m pytest tests/test_api.py
 * **Rate Limits**: Currently uses the Groq free tier; a production setup would route to self-hosted Ollama instances or an enterprise API gateway.
 * **Caching Layer**: Frequent aggregate queries can be cached with Redis to reduce repeated LLM inference latency.
 * **Complex Temporal Filtering**: Pre-processing human expressions like "last fiscal quarter" into explicit timestamp bounds before prompt delivery.
-````<ElicitationsGroup>
-<Elicitation id="email-confirmation">Would you like the ready-to-send email template to submit to RajathKumar@dotmappers.in?</Elicitation>
-<Elicitation id="walkthrough-prep">Would you like to practice sample technical questions for the 30-minute architecture review call?</Elicitation>
-</ElicitationsGroup>
